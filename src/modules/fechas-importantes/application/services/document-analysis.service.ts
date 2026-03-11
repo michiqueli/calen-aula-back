@@ -20,6 +20,7 @@ export interface ExtractedFecha {
   titulo: string;
   fechaInicio: string;
   fechaFin: string | null;
+  periodoNombre: string | null;
 }
 
 @Injectable()
@@ -101,26 +102,45 @@ export class DocumentAnalysisService {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-    const prompt = `Analiza el siguiente documento académico/educativo y extrae TODAS las fechas importantes que encuentres.
+    const prompt = `Eres un asistente especializado en extraer fechas de documentos oficiales del calendario escolar argentino (resoluciones del Consejo Provincial de Educación de Neuquén).
 
-Para cada fecha importante, identifica:
-- Un título descriptivo corto
-- La fecha de inicio (formato YYYY-MM-DD)
-- La fecha de fin si es un rango (formato YYYY-MM-DD), o null si es un solo día
+Analiza el siguiente documento y extrae TODAS las fechas importantes. Este tipo de documentos contiene:
 
-Busca eventos como:
-- Inicio/fin de clases o cuatrimestres
-- Fechas de exámenes parciales y finales
-- Períodos de inscripción
-- Feriados y recesos
-- Entregas de trabajos prácticos
-- Cualquier otra fecha relevante mencionada
+PERÍODOS LECTIVOS (MUY IMPORTANTES - siempre tienen fechas concretas de inicio y fin):
+- Período Escolar, Período Lectivo, Término Lectivo para cada nivel (Inicial, Primario, Secundario, Superior)
+- Vienen organizados por calendario: "Febrero-Diciembre", "Marzo-Diciembre", "Septiembre-Mayo"
+- Cada uno tiene una fecha exacta de inicio y fin (ej: "del 17 de febrero al 19 de diciembre")
+- El nombre del período calendario al que pertenecen (ej: "Febrero-Diciembre") debe ir en periodoNombre
 
-IMPORTANTE: Responde ÚNICAMENTE con un JSON array válido, sin markdown ni texto adicional.
+OTROS EVENTOS CON FECHAS:
+- Recesos de invierno y verano (con rangos de fechas)
+- Jornadas institucionales
+- Feriados nacionales y provinciales
+- Aniversarios de localidades
+- Fechas límite administrativas
+- Actos escolares obligatorios
+- Presentación de docentes / personal
+
+REGLAS:
+1. Cada evento DEBE tener una fecha concreta (día/mes/año). El campo fechaInicio es OBLIGATORIO.
+2. Si un evento tiene rango de fechas (ej: "del 14 al 25 de julio"), usar fechaInicio y fechaFin.
+3. Si solo es un día (ej: "24 de marzo"), fechaFin debe ser null.
+4. Inferir el año del contexto del documento.
+5. Para períodos lectivos/escolares, incluir en periodoNombre el nombre del calendario al que pertenecen (ej: "Febrero-Diciembre", "Marzo-Diciembre", "Septiembre-Mayo"). Si no aplica, usar null.
+6. Para eventos que pertenecen claramente a un período calendario específico (ej: jornadas, recesos), incluir también su periodoNombre.
+
+Responde ÚNICAMENTE con un JSON array válido, sin markdown ni texto adicional.
 Formato exacto:
-[{"titulo": "string", "fechaInicio": "YYYY-MM-DD", "fechaFin": "YYYY-MM-DD o null"}]
+[{"titulo": "string", "fechaInicio": "YYYY-MM-DD", "fechaFin": "YYYY-MM-DD o null", "periodoNombre": "string o null"}]
 
-Si no encuentras ninguna fecha, responde con un array vacío: []
+Ejemplo:
+[
+  {"titulo": "Inicio Período Lectivo Inicial y Primario", "fechaInicio": "2026-03-02", "fechaFin": null, "periodoNombre": "Marzo-Diciembre"},
+  {"titulo": "Receso Invernal", "fechaInicio": "2026-07-14", "fechaFin": "2026-07-25", "periodoNombre": "Marzo-Diciembre"},
+  {"titulo": "Día de la Independencia", "fechaInicio": "2026-07-09", "fechaFin": null, "periodoNombre": null}
+]
+
+Si no encuentras ninguna fecha, responde: []
 
 Documento:
 ${text}`;
@@ -139,20 +159,24 @@ ${text}`;
       if (!Array.isArray(parsed)) {
         return [];
       }
+
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
       return parsed
         .filter(
           (item: any) =>
             item.titulo &&
             item.fechaInicio &&
-            /^\d{4}-\d{2}-\d{2}$/.test(item.fechaInicio),
+            dateRegex.test(String(item.fechaInicio)),
         )
         .map((item: any) => ({
           titulo: String(item.titulo),
-          fechaInicio: item.fechaInicio,
+          fechaInicio: String(item.fechaInicio),
           fechaFin:
-            item.fechaFin && /^\d{4}-\d{2}-\d{2}$/.test(item.fechaFin)
-              ? item.fechaFin
+            item.fechaFin && dateRegex.test(String(item.fechaFin))
+              ? String(item.fechaFin)
               : null,
+          periodoNombre:
+            item.periodoNombre ? String(item.periodoNombre) : null,
         }));
     } catch {
       throw new BadRequestException(
