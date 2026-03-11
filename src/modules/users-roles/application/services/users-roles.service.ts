@@ -18,7 +18,11 @@ export class UsersRolesService {
   async getRole(userId: string): Promise<UserRoleResponseDto> {
     const userRole = await this.usersRolesPort.findByUserId(userId);
     if (!userRole) {
-      throw new NotFoundException('Rol de usuario no encontrado');
+      // Return default 'user' role when no explicit role is assigned
+      return {
+        id: userId,
+        rol: 'user',
+      };
     }
     return {
       id: userRole.id,
