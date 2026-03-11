@@ -18,9 +18,11 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { FechaImportanteService } from '../../application/services/fecha-importante.service.js';
+import { DocumentAnalysisService } from '../../application/services/document-analysis.service.js';
 import { CreateFechaImportanteDto } from '../../application/dtos/create-fecha-importante.dto.js';
 import { UpdateFechaImportanteDto } from '../../application/dtos/update-fecha-importante.dto.js';
 import { BulkImportFechaDto } from '../../application/dtos/bulk-import-fecha.dto.js';
+import { AnalyzeDocumentDto } from '../../application/dtos/analyze-document.dto.js';
 import { FechaImportanteAnexo } from '../../domain/entities/fecha-importante-anexo.entity.js';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard.js';
 import { CurrentUser, JwtPayload } from '../../../../common/decorators/current-user.decorator.js';
@@ -33,7 +35,10 @@ import { CurrentUser, JwtPayload } from '../../../../common/decorators/current-u
 @UseGuards(JwtAuthGuard)
 @Controller('fechas-importantes')
 export class FechaImportanteController {
-  constructor(private readonly fechaImportanteService: FechaImportanteService) {}
+  constructor(
+    private readonly fechaImportanteService: FechaImportanteService,
+    private readonly documentAnalysisService: DocumentAnalysisService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Listar fechas importantes por anexo' })
@@ -80,6 +85,20 @@ export class FechaImportanteController {
   @ApiResponse({ status: 200, description: 'Fecha importante eliminada' })
   async delete(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     return this.fechaImportanteService.delete(id);
+  }
+
+  @Post('analyze-document')
+  @ApiOperation({ summary: 'Analizar documento y extraer fechas importantes con IA' })
+  @ApiResponse({ status: 200, description: 'Fechas extraídas del documento' })
+  @ApiResponse({ status: 400, description: 'Tipo de archivo no soportado o error de análisis' })
+  async analyzeDocument(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: AnalyzeDocumentDto,
+  ) {
+    return this.documentAnalysisService.analyzeDocument(
+      dto.archivoAnexoId,
+      user.sub,
+    );
   }
 
   @Get('count-by-periodo/:periodoId')
