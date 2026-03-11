@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType, Schema } from '@google/generative-ai';
 import { PDFParse } from 'pdf-parse';
 import {
   StoragePort,
@@ -75,7 +75,7 @@ export class DocumentAnalysisService {
     } else {
       throw new BadRequestException(
         `Tipo de archivo no soportado para análisis: ${archivo.fileType}. ` +
-          'Se aceptan archivos PDF o de texto.',
+        'Se aceptan archivos PDF o de texto.',
       );
     }
 
@@ -100,7 +100,43 @@ export class DocumentAnalysisService {
     text: string,
   ): Promise<ExtractedFecha[]> {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+    // Definimos el esquema estricto que debe devolver Gemini
+    const responseSchema: Schema = {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          titulo: {
+            type: SchemaType.STRING,
+            description: "Nombre del evento o período",
+          },
+          fechaInicio: {
+            type: SchemaType.STRING,
+            description: "Fecha de inicio exacta en formato YYYY-MM-DD",
+          },
+          fechaFin: {
+            type: SchemaType.STRING,
+            nullable: true,
+            description: "Fecha de fin en formato YYYY-MM-DD, o null si es un solo día",
+          },
+          periodoNombre: {
+            type: SchemaType.STRING,
+            nullable: true,
+            description: "Nombre del calendario (ej: Febrero-Diciembre, Marzo-Diciembre) o null",
+          },
+        },
+        required: ["titulo", "fechaInicio", "fechaFin", "periodoNombre"],
+      },
+    };
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash', // Te sugiero usar la 2.5 que es más precisa
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: responseSchema, // <-- Magia acá
+      }
+    });
 
     const prompt = `Eres un asistente especializado en extraer fechas de documentos oficiales del calendario escolar argentino (resoluciones del Consejo Provincial de Educación de Neuquén).
 
@@ -110,7 +146,6 @@ PERÍODOS LECTIVOS (MUY IMPORTANTES - siempre tienen fechas concretas de inicio 
 - Período Escolar, Período Lectivo, Término Lectivo para cada nivel (Inicial, Primario, Secundario, Superior)
 - Vienen organizados por calendario: "Febrero-Diciembre", "Marzo-Diciembre", "Septiembre-Mayo"
 - Cada uno tiene una fecha exacta de inicio y fin (ej: "del 17 de febrero al 19 de diciembre")
-- El nombre del período calendario al que pertenecen (ej: "Febrero-Diciembre") debe ir en periodoNombre
 
 OTROS EVENTOS CON FECHAS:
 - Recesos de invierno y verano (con rangos de fechas)
@@ -123,39 +158,21 @@ OTROS EVENTOS CON FECHAS:
 
 REGLAS:
 1. Cada evento DEBE tener una fecha concreta (día/mes/año). El campo fechaInicio es OBLIGATORIO.
-2. Si un evento tiene rango de fechas (ej: "del 14 al 25 de julio"), usar fechaInicio y fechaFin.
-3. Si solo es un día (ej: "24 de marzo"), fechaFin debe ser null.
+2. Si un evento tiene rango de fechas, usar fechaInicio y fechaFin.
+3. Si solo es un día, fechaFin debe ser null.
 4. Inferir el año del contexto del documento.
-5. Para períodos lectivos/escolares, incluir en periodoNombre el nombre del calendario al que pertenecen (ej: "Febrero-Diciembre", "Marzo-Diciembre", "Septiembre-Mayo"). Si no aplica, usar null.
-6. Para eventos que pertenecen claramente a un período calendario específico (ej: jornadas, recesos), incluir también su periodoNombre.
-
-Responde ÚNICAMENTE con un JSON array válido, sin markdown ni texto adicional.
-Formato exacto:
-[{"titulo": "string", "fechaInicio": "YYYY-MM-DD", "fechaFin": "YYYY-MM-DD o null", "periodoNombre": "string o null"}]
-
-Ejemplo:
-[
-  {"titulo": "Inicio Período Lectivo Inicial y Primario", "fechaInicio": "2026-03-02", "fechaFin": null, "periodoNombre": "Marzo-Diciembre"},
-  {"titulo": "Receso Invernal", "fechaInicio": "2026-07-14", "fechaFin": "2026-07-25", "periodoNombre": "Marzo-Diciembre"},
-  {"titulo": "Día de la Independencia", "fechaInicio": "2026-07-09", "fechaFin": null, "periodoNombre": null}
-]
-
-Si no encuentras ninguna fecha, responde: []
+5. Para períodos lectivos/escolares, incluir en periodoNombre el nombre del calendario al que pertenecen. Si no aplica, usar null.
 
 Documento:
 ${text}`;
 
     const result = await model.generateContent(prompt);
-    const response = result.response.text();
-
-    // Clean response - remove markdown code blocks if present
-    const cleaned = response
-      .replace(/```json\s*/g, '')
-      .replace(/```\s*/g, '')
-      .trim();
+    const responseText = result.response.text();
 
     try {
-      const parsed = JSON.parse(cleaned);
+      // Como usamos responseMimeType y responseSchema, el texto YA es un JSON puro y válido
+      const parsed = JSON.parse(responseText);
+
       if (!Array.isArray(parsed)) {
         return [];
       }
@@ -171,14 +188,11 @@ ${text}`;
         .map((item: any) => ({
           titulo: String(item.titulo),
           fechaInicio: String(item.fechaInicio),
-          fechaFin:
-            item.fechaFin && dateRegex.test(String(item.fechaFin))
-              ? String(item.fechaFin)
-              : null,
-          periodoNombre:
-            item.periodoNombre ? String(item.periodoNombre) : null,
+          fechaFin: item.fechaFin && dateRegex.test(String(item.fechaFin)) ? String(item.fechaFin) : null,
+          periodoNombre: item.periodoNombre ? String(item.periodoNombre) : null,
         }));
-    } catch {
+    } catch (error) {
+      console.error("Error parseando respuesta de Gemini:", error);
       throw new BadRequestException(
         'No se pudieron extraer las fechas del documento. Intenta de nuevo.',
       );
