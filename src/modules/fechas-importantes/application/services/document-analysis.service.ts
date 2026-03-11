@@ -20,6 +20,7 @@ export interface ExtractedFecha {
   titulo: string;
   fechaInicio: string;
   fechaFin: string | null;
+  periodoNombre: string | null;
 }
 
 @Injectable()
@@ -101,32 +102,45 @@ export class DocumentAnalysisService {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-    const prompt = `Eres un asistente especializado en extraer fechas de documentos oficiales del calendario escolar argentino (resoluciones del Consejo Provincial de Educación).
+    const prompt = `Eres un asistente especializado en extraer fechas de documentos oficiales del calendario escolar argentino (resoluciones del Consejo Provincial de Educación de Neuquén).
 
-Analiza el siguiente documento y extrae TODAS las fechas concretas que encuentres. Este tipo de documentos suele contener:
-- Inicio y fin del período lectivo / período escolar / término lectivo (con fechas exactas tipo "2 de marzo", "15 de diciembre")
+Analiza el siguiente documento y extrae TODAS las fechas importantes. Este tipo de documentos contiene:
+
+PERÍODOS LECTIVOS (MUY IMPORTANTES - siempre tienen fechas concretas de inicio y fin):
+- Período Escolar, Período Lectivo, Término Lectivo para cada nivel (Inicial, Primario, Secundario, Superior)
+- Vienen organizados por calendario: "Febrero-Diciembre", "Marzo-Diciembre", "Septiembre-Mayo"
+- Cada uno tiene una fecha exacta de inicio y fin (ej: "del 17 de febrero al 19 de diciembre")
+- El nombre del período calendario al que pertenecen (ej: "Febrero-Diciembre") debe ir en periodoNombre
+
+OTROS EVENTOS CON FECHAS:
 - Recesos de invierno y verano (con rangos de fechas)
-- Jornadas institucionales (con fecha exacta)
-- Feriados nacionales y provinciales (con fecha exacta)
-- Aniversarios de localidades (con fecha exacta)
+- Jornadas institucionales
+- Feriados nacionales y provinciales
+- Aniversarios de localidades
 - Fechas límite administrativas
 - Actos escolares obligatorios
-- Cualquier otra fecha concreta mencionada
+- Presentación de docentes / personal
 
-REGLAS CRÍTICAS:
-1. SOLO incluir eventos que tengan una FECHA CONCRETA (día/mes/año) en el documento.
-2. NO incluir eventos que solo mencionan meses sin día específico (ej: "Febrero-Diciembre" sin día concreto).
-3. NO incluir rangos genéricos como "período Marzo-Diciembre" si no hay fecha exacta de inicio/fin.
-4. Si un evento tiene rango de fechas (ej: "del 14 al 25 de julio"), usar fechaInicio y fechaFin.
-5. Si solo dice un día (ej: "24 de marzo"), fechaFin debe ser null.
-6. El campo fechaInicio es OBLIGATORIO - nunca omitirlo.
-7. Inferir el año del contexto del documento (generalmente el año lectivo mencionado).
+REGLAS:
+1. Cada evento DEBE tener una fecha concreta (día/mes/año). El campo fechaInicio es OBLIGATORIO.
+2. Si un evento tiene rango de fechas (ej: "del 14 al 25 de julio"), usar fechaInicio y fechaFin.
+3. Si solo es un día (ej: "24 de marzo"), fechaFin debe ser null.
+4. Inferir el año del contexto del documento.
+5. Para períodos lectivos/escolares, incluir en periodoNombre el nombre del calendario al que pertenecen (ej: "Febrero-Diciembre", "Marzo-Diciembre", "Septiembre-Mayo"). Si no aplica, usar null.
+6. Para eventos que pertenecen claramente a un período calendario específico (ej: jornadas, recesos), incluir también su periodoNombre.
 
 Responde ÚNICAMENTE con un JSON array válido, sin markdown ni texto adicional.
 Formato exacto:
-[{"titulo": "Descripción corta del evento", "fechaInicio": "YYYY-MM-DD", "fechaFin": "YYYY-MM-DD o null"}]
+[{"titulo": "string", "fechaInicio": "YYYY-MM-DD", "fechaFin": "YYYY-MM-DD o null", "periodoNombre": "string o null"}]
 
-Si no encuentras ninguna fecha concreta, responde: []
+Ejemplo:
+[
+  {"titulo": "Inicio Período Lectivo Inicial y Primario", "fechaInicio": "2026-03-02", "fechaFin": null, "periodoNombre": "Marzo-Diciembre"},
+  {"titulo": "Receso Invernal", "fechaInicio": "2026-07-14", "fechaFin": "2026-07-25", "periodoNombre": "Marzo-Diciembre"},
+  {"titulo": "Día de la Independencia", "fechaInicio": "2026-07-09", "fechaFin": null, "periodoNombre": null}
+]
+
+Si no encuentras ninguna fecha, responde: []
 
 Documento:
 ${text}`;
@@ -161,6 +175,8 @@ ${text}`;
             item.fechaFin && dateRegex.test(String(item.fechaFin))
               ? String(item.fechaFin)
               : null,
+          periodoNombre:
+            item.periodoNombre ? String(item.periodoNombre) : null,
         }));
     } catch {
       throw new BadRequestException(
