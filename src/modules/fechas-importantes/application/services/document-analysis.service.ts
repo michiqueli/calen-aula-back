@@ -101,26 +101,32 @@ export class DocumentAnalysisService {
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-    const prompt = `Analiza el siguiente documento académico/educativo y extrae TODAS las fechas importantes que encuentres.
+    const prompt = `Eres un asistente especializado en extraer fechas de documentos oficiales del calendario escolar argentino (resoluciones del Consejo Provincial de Educación).
 
-Para cada fecha importante, identifica:
-- Un título descriptivo corto
-- La fecha de inicio (formato YYYY-MM-DD)
-- La fecha de fin si es un rango (formato YYYY-MM-DD), o null si es un solo día
+Analiza el siguiente documento y extrae TODAS las fechas concretas que encuentres. Este tipo de documentos suele contener:
+- Inicio y fin del período lectivo / período escolar / término lectivo (con fechas exactas tipo "2 de marzo", "15 de diciembre")
+- Recesos de invierno y verano (con rangos de fechas)
+- Jornadas institucionales (con fecha exacta)
+- Feriados nacionales y provinciales (con fecha exacta)
+- Aniversarios de localidades (con fecha exacta)
+- Fechas límite administrativas
+- Actos escolares obligatorios
+- Cualquier otra fecha concreta mencionada
 
-Busca eventos como:
-- Inicio/fin de clases o cuatrimestres
-- Fechas de exámenes parciales y finales
-- Períodos de inscripción
-- Feriados y recesos
-- Entregas de trabajos prácticos
-- Cualquier otra fecha relevante mencionada
+REGLAS CRÍTICAS:
+1. SOLO incluir eventos que tengan una FECHA CONCRETA (día/mes/año) en el documento.
+2. NO incluir eventos que solo mencionan meses sin día específico (ej: "Febrero-Diciembre" sin día concreto).
+3. NO incluir rangos genéricos como "período Marzo-Diciembre" si no hay fecha exacta de inicio/fin.
+4. Si un evento tiene rango de fechas (ej: "del 14 al 25 de julio"), usar fechaInicio y fechaFin.
+5. Si solo dice un día (ej: "24 de marzo"), fechaFin debe ser null.
+6. El campo fechaInicio es OBLIGATORIO - nunca omitirlo.
+7. Inferir el año del contexto del documento (generalmente el año lectivo mencionado).
 
-IMPORTANTE: Responde ÚNICAMENTE con un JSON array válido, sin markdown ni texto adicional.
+Responde ÚNICAMENTE con un JSON array válido, sin markdown ni texto adicional.
 Formato exacto:
-[{"titulo": "string", "fechaInicio": "YYYY-MM-DD", "fechaFin": "YYYY-MM-DD o null"}]
+[{"titulo": "Descripción corta del evento", "fechaInicio": "YYYY-MM-DD", "fechaFin": "YYYY-MM-DD o null"}]
 
-Si no encuentras ninguna fecha, responde con un array vacío: []
+Si no encuentras ninguna fecha concreta, responde: []
 
 Documento:
 ${text}`;
@@ -139,19 +145,21 @@ ${text}`;
       if (!Array.isArray(parsed)) {
         return [];
       }
+
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
       return parsed
         .filter(
           (item: any) =>
             item.titulo &&
             item.fechaInicio &&
-            /^\d{4}-\d{2}-\d{2}$/.test(item.fechaInicio),
+            dateRegex.test(String(item.fechaInicio)),
         )
         .map((item: any) => ({
           titulo: String(item.titulo),
-          fechaInicio: item.fechaInicio,
+          fechaInicio: String(item.fechaInicio),
           fechaFin:
-            item.fechaFin && /^\d{4}-\d{2}-\d{2}$/.test(item.fechaFin)
-              ? item.fechaFin
+            item.fechaFin && dateRegex.test(String(item.fechaFin))
+              ? String(item.fechaFin)
               : null,
         }));
     } catch {
