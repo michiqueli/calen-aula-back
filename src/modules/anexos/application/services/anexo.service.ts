@@ -52,6 +52,9 @@ export class AnexoService {
     return this.anexoPort.create({
       titulo: dto.titulo,
       numero: dto.numero,
+      rangoLectivo: dto.rangoLectivo ?? null,
+      fechaInicio: dto.fechaInicio ?? null,
+      fechaFin: dto.fechaFin ?? null,
       userId,
     });
   }

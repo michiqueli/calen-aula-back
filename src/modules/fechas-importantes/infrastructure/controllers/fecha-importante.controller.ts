@@ -84,10 +84,11 @@ export class FechaImportanteController {
 
   @Get('count-by-periodo/:periodoId')
   @ApiOperation({ summary: 'Contar fechas importantes por periodo' })
-  @ApiResponse({ status: 200, description: 'Cantidad de fechas que usan el periodo', type: Number })
+  @ApiResponse({ status: 200, description: 'Cantidad de fechas que usan el periodo' })
   async countByPeriodo(
     @Param('periodoId', ParseUUIDPipe) periodoId: string,
-  ): Promise<number> {
-    return this.fechaImportanteService.countByPeriodoId(periodoId);
+  ): Promise<{ count: number }> {
+    const count = await this.fechaImportanteService.countByPeriodoId(periodoId);
+    return { count };
   }
 }
