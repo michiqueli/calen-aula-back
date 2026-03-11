@@ -25,6 +25,18 @@ export class Anexo {
   @Column({ type: 'text' })
   titulo!: string;
 
+  @ApiProperty({ description: 'Rango lectivo', example: 'Ciclo Lectivo 2024', required: false })
+  @Column({ type: 'text', name: 'rango_lectivo', nullable: true })
+  rangoLectivo!: string | null;
+
+  @ApiProperty({ description: 'Fecha de inicio', required: false })
+  @Column({ type: 'date', name: 'fecha_inicio', nullable: true })
+  fechaInicio!: string | null;
+
+  @ApiProperty({ description: 'Fecha de fin', required: false })
+  @Column({ type: 'date', name: 'fecha_fin', nullable: true })
+  fechaFin!: string | null;
+
   @ApiProperty({ description: 'ID del usuario propietario' })
   @Column({ type: 'uuid', name: 'user_id' })
   userId!: string;
