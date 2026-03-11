@@ -57,4 +57,18 @@ export class S3StorageAdapter implements StoragePort {
     });
     return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
   }
+
+  async getObject(bucket: string, key: string): Promise<Buffer> {
+    const command = new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    });
+    const response = await this.client.send(command);
+    const stream = response.Body as NodeJS.ReadableStream;
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+      chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
 }

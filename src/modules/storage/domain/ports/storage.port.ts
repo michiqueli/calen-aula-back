@@ -28,6 +28,14 @@ export interface StoragePort {
    * @returns URL firmada temporal
    */
   getSignedUrl(bucket: string, key: string, expiresInSeconds: number): Promise<string>;
+
+  /**
+   * Descarga el contenido de un archivo como Buffer.
+   * @param bucket - Nombre del bucket
+   * @param key - Clave/ruta del archivo
+   * @returns Contenido del archivo como Buffer
+   */
+  getObject(bucket: string, key: string): Promise<Buffer>;
 }
 
 export const STORAGE_PORT = Symbol('STORAGE_PORT');

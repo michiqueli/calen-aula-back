@@ -20,6 +20,6 @@ import { ArchivosAnexosController } from './infrastructure/controllers/archivos-
       useClass: ArchivosAnexosRepository,
     },
   ],
-  exports: [ArchivosAnexosService],
+  exports: [ArchivosAnexosService, ARCHIVOS_ANEXOS_PORT],
 })
 export class ArchivosAnexosModule {}

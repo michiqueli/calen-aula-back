@@ -4,8 +4,10 @@ import { FechaImportanteAnexo } from './domain/entities/fecha-importante-anexo.e
 import { FECHA_IMPORTANTE_PORT } from './domain/ports/fecha-importante.port.js';
 import { FechaImportanteRepository } from './infrastructure/persistence/fecha-importante.repository.js';
 import { FechaImportanteService } from './application/services/fecha-importante.service.js';
+import { DocumentAnalysisService } from './application/services/document-analysis.service.js';
 import { FechaImportanteController } from './infrastructure/controllers/fecha-importante.controller.js';
 import { PeriodoModule } from '../periodos/periodo.module.js';
+import { ArchivosAnexosModule } from '../archivos-anexos/archivos-anexos.module.js';
 
 /**
  * Módulo de fechas importantes.
@@ -15,10 +17,12 @@ import { PeriodoModule } from '../periodos/periodo.module.js';
   imports: [
     TypeOrmModule.forFeature([FechaImportanteAnexo]),
     forwardRef(() => PeriodoModule),
+    ArchivosAnexosModule,
   ],
   controllers: [FechaImportanteController],
   providers: [
     FechaImportanteService,
+    DocumentAnalysisService,
     {
       provide: FECHA_IMPORTANTE_PORT,
       useClass: FechaImportanteRepository,
